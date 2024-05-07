@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>OceanS</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" type="image/png" href="./img/logo_black.png">
+       
+        <link href="./css/oceans.css" rel="stylesheet">
+
+        <script type="text/javascript" src="./js/vendors.scroll.js"></script>
+        <script type="text/javascript" src="./js/vendors.vue.2.js"></script> 
+        <script type="module" src="./js/oceans.utils.js"></script>
+   
+        <!-- specific styles -->
+        <style>
+           
+
+            body {
+                top: 0; 
+                left: 0; 
+                min-width: 100%;
+                min-height: 100%;
+                background-color: #202020;
+                color: white;
+                width: 100vw;
+                line-height: 100vh;
+                overflow: hidden;
+                text-align: center;
+                height: 100vh;
+                vertical-align: middle;
+                animation: fadeInAnimation ease 5s; 
+                animation-iteration-count: 1; 
+                animation-fill-mode: forwards; 
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+                text-rendering: optimizeLegibility;
+            } 
+
+            @keyframes fadeInAnimation { 
+                0% { 
+                    opacity: 0; 
+                } 
+                100% { 
+                    opacity: 1; 
+                } 
+            } 
+
+            /** menu **/
+
+            menu-box {
+                display: inline-block;outline:none;background-color: #FFFFFF00;margin-left:0.7vw;margin-right:0.7vw;text-align:center;line-height: 4vh;z-index:11;
+            }
+
+            menu-item, menu-item a {
+                z-index:12;
+                transition: all 0.3s;
+                padding-left:0.5vw;
+                padding-right:0.5vw;
+                white-space: nowrap;
+                line-height: 4vh;
+                display: inline-block;
+                color: #FFFFFFC0;
+                border-top: solid 1px #00000000;
+                cursor:pointer;
+                margin-left:1vw;
+                margin-right:1vw;
+                font-size: 1.7vh;
+                font-family: Roboto;
+                font-weight: 100;
+            }
+
+            menu-item:hover {
+                border-top: solid 1px #FFFFFFFF;color: #FFFFFFFF;
+            }
+
+            menu-item a:hover {
+                border-top: solid 1px #FFFFFF00;color: #FFFFFFFF;
+            }
+
+            /** solutions **/
+            solutions-block {
+                position: fixed;
+                display:inline-block;
+                width: 25vw;
+                line-height:10vh;
+                vertical-align:middle;
+                text-align:center;
+                border-style: solid;
+                border-width: 1px;
+                border-color: #FFFFFFC0;
+                border-radius: 0vh 1vh 0vh 0vh;
+                cursor:pointer;
+                transition: all 0.3s;
+            }
+
+            solutions-block:hover {
+                background: #FFFFFF40;
+            }
+
+            solutions-item {
+                font-size:2vh;
+                font-family:Roboto;
+                font-weight:100;
+                line-height: 1.8vh;
+            }
+
+
+            service-detail {
+                position: fixed;
+                display: inline-block;
+                width: 46vw;
+                height: 74vh;
+                border-left: solid 1px #FFFFFFC0;
+                line-height: 2vh;
+                left: 50vw;
+                top: 15vh;
+                /*border-radius: 1.5vh;*/
+                font-weight: 100;
+            }
+
+
+
+            /** about us **/
+            about-block {
+                line-height:2vh;z-index:12;transition: all 0.3s;padding-left:0.5vw; padding-right:0.5vw;display: inline-block; color: #FFFFFFC0;font-size: 1.5vh;font-family: Roboto; font-weight: 700;background:#FFFFFF10;
+            }
+
+
+            arrow {
+                border-right: solid 2px #FFFFFFC0;
+                border-top: solid 2px #FFFFFFC0;
+                line-height:2vh;
+                max-width:2vh;
+                width:2vh;
+                max-height:2vh;
+                height:2vh;
+                display:inline-block;
+                transform:rotate(45deg);
+                border-top-right-radius: 0.3vh;
+                position:fixed;
+                display:inline-block;
+            }
+            arrow::before {
+                line-height: 2vh;
+                min-width: 15vh;
+                max-width: 15vh;
+                display: inline-block;
+                border-top: solid 2px #FFFFFFC0;
+                content: "\00a0";
+                transform: rotate(-45deg);
+                position: relative;
+                top: 5vh;
+                left: -10.20vh;
+            }
+
+            
+            /** debug **/
+
+            debug {
+                position: fixed;
+                display:inline-block;
+                width: 100vw;
+                line-height:1.2vh;
+                height:10vh;
+                font-size: 1vh;
+                font-family:Roboto;
+                font-weight:100;
+                top: 90vh;
+                left:0vw;
+                z-index:20;
+
+            }
+
+
+        </style>
+    
+        <!-- page controller -->
+        <script type='text/javascript'>
+            
+            let methods = 
+            {             
+                DisplayService: (service) =>
+                {
+                    console.log(this);
+                    this.apps.service = service;
+                },
+
+                SetMode: (mode) => 
+                {
+                    this.apps.service = "";
+                    this.apps.mode = mode;
+                }   
+            };
+
+            let data = 
+            {
+                window: window,
+                mode: "home",
+                service: "",
+                debug: "",
+                detail: {}
+            };
+
+            let mounted =  () =>
+            {   
+                
+            };
+            
+            document.addEventListener('DOMContentLoaded', () => {
+                let scene = document.getElementById('scene');
+                let parallaxInstance = new Parallax(scene);
+                window.apps = new Vue({ el: '#app', data: data, methods : methods, mounted: mounted });
+                window.addEventListener('resize', () => { window.apps.vh = window.innerHeight; window.apps.vw = window.innerWidth;});
+            });
+            
+        </script>
+
+</head>
+
+    <body>
+        <logo><img src="./img/logo.png"></logo>
+        <div id="app">
+
+            <!-- page header -->
+            <span style="z-index:21;position:sticky;text-align:right;vertical-align:middle;line-height: 7vh;max-height: 7vh;min-height: 7vh;top: 0;width: 100vw;background-color:#00000020;display: table;color:#FFFFFFE0;">                        
+                <menu-box><menu-item><a href="mailto:info@oceansolutions.fr">CONTACT US</a></menu-item></menu-box> 
+            </span>
+
+            
+            <!-- home page -->
+            <div v-if="mode === 'home'" style="backdrop-filter: blur(10px);top: 42vh;z-index:10;position: fixed;display: block;width: 80vw;left: 10vw;border-radius:1vh;">
+                <div style="line-height: 15vh;font-size: 14.8vh;font-family: 'Cormorant SC', serif;">OceanS</div>
+                <div style="line-height: 3.6vh;font-size: 2.6vh;">BUSINESS AND IT CONSULTANCY</div>
+            </div>
+
+        </div>
+        
+        
+        
+        <!-- parallax background -->
+        <div id="scene" data-relative-input="true" style="position:fixed;display:inline-block; left:-35vh;top:-25vh;z-index:-1;"><img src="img/oceans-2.jpg" data-depth='0.9' style="height:150vh;z-index:-1;"/></div>
+
+    
+
+    </body>
+
+</html>

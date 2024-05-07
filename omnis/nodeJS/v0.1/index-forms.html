@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="EN">
+    <head>
+        <title>forms</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="utf-8">
+        <!-- styles -->
+        
+        <link rel="stylesheet" href="./css/a.css"/>
+        <link rel="stylesheet" href="./css/classical.css"/>
+
+
+        <!-- libraries -->
+                
+        <script type="text/javascript" src="./js/vue.js"></script>
+        <script type="text/javascript" src="./js/axios.js"></script>
+    
+        <script type="text/javascript" src="../commons/js/antipod.helper.js"></script>
+        <script type="text/javascript" src="./js/a.ui.js"></script>
+        <script type="text/javascript" src="./js/a.ui.vue.js"></script>
+        
+        <script type="text/javascript" src="./js/classical.js"></script>
+        
+            
+        
+        <!-- page controller -->
+        
+        <script type='text/javascript'>
+            var data = {}
+            data.info = null
+            data.error = null
+            data.success = null
+            data.Model = Model
+            data.References = References
+            data.Flows = Flows
+            data.Templates = Templates
+            data.Data = Data
+            data.instance = {}           
+            data.flow = {"position" : 0,"id" : "", "error" : false}
+
+            var methods = {}
+
+            methods.GetInstance = function()    { return data.instance }
+            
+            methods.GetModel = function()       { return this.GetInstance()._model }
+
+            methods.GetFlow = function()        { return data.Flows[data.flow.id] }
+
+            methods.GetSteps = function()       { return this.GetFlow().steps }
+
+            methods.GetStep = function()        { return this.GetSteps()[data.flow.position] }
+
+            methods.GetTemplate = function()    { return data.Templates[this.GetStep().template]}
+
+            methods.GetCollection = function()  { return data.Templates[this.GetStep().template]}
+
+
+            methods.SetFlow = function(flowId) {
+                data.flow.id = flowId
+                data.flow.position = 0
+            }
+
+            methods.CheckObject = function(field, value, key = "") {
+                var ret = true
+                if(value !== undefined && value.length > 0) {
+                    if(field.filter !== undefined && !field.filter.check(value)) {
+                        ret = false
+                        this.$refs[data.flow.position + field.id + key][0].className = "invalid"
+                    }
+                } else if(field.mandatory && (field.condition === undefined || field.condition(data.instance))) {
+                    ret = false
+                    this.$refs[data.flow.position + field.id + key][0].className = "invalid"
+                }
+                return ret
+            }
+
+            methods.CheckForm = function() {
+                var ret = true
+                if(this.GetTemplate().type === "object") 
+                    for(var fieldName in this.GetTemplate().fields) {
+                        var field = this.GetTemplate().fields[fieldName]
+                        var value = this.GetTemplate().binding === undefined ? data.instance[fieldName] : data.instance[this.GetTemplate().binding][fieldName]
+                        ret = ret & this.CheckObject(field, value)
+                    }
+                else if(this.GetTemplate().type === "collection") 
+                    for(var fieldName in this.GetTemplate().fields) {
+                        var field = this.GetTemplate().fields[fieldName]
+                        for(var key in data.instance[this.GetTemplate().binding]) {
+                            var value = data.instance[this.GetTemplate().binding][key][fieldName]
+                            ret = ret & this.CheckObject(field, value, key)                
+                        }
+                    }
+                return ret
+            }
+
+
+            methods.Next = function() {
+                if(this.CheckForm()) {
+                    this.GetStep().onEnd()
+                    if(data.flow.position < this.GetSteps().length -1) {
+                        data.flow.position++
+                        this.GetStep().onStart()
+                    }
+                }
+            }
+
+            methods.Previous = function() {
+                this.GetStep().onEnd()
+                if(this.GetSteps().length > 0) {
+                    data.flow.position--
+                    this.GetStep().onStart()
+                }
+            }
+
+            methods.GoTo = function(step) {
+                this.GetStep().onEnd()
+                data.flow.position = step
+                this.GetStep().onStart()
+            }
+
+            methods.Choice = function(value) {
+                this.GetTemplate().set(this.GetInstance(), value)
+                this.Next()
+            }
+
+            methods.GetValue = function(fieldName, id, sfield) {
+                return this.GetTemplate().fields[fieldName].get(this.GetInstance(), id, sfield)
+            }
+
+            methods.SetValue = function(fieldName, target, id) {
+                if(this.GetTemplate().fields[fieldName].mandatory && target.value.length > 0) target.className = undefined
+                if(this.GetTemplate().fields[fieldName].mandatory && target.value.length === 0) target.className = 'invalid'
+                var value = target.value
+                if(this.GetTemplate().fields[fieldName].filter !== undefined) value = this.GetTemplate().fields[fieldName].filter.format(value)
+                this.GetTemplate().fields[fieldName].set(this.GetInstance(), value, id)
+                this.$forceUpdate()
+            }
+
+            methods.ArrayUp = function(fieldName, index, id) {
+                this.GetTemplate().fields[fieldName].up(this.GetInstance(), index, id)
+                this.$forceUpdate()
+            }
+
+            methods.ArrayDrop = function(fieldName, index, id) {
+                this.GetTemplate().fields[fieldName].drop(this.GetInstance(), index, id)
+                this.$forceUpdate()
+            }
+
+            methods.AddValue = function(fieldName, target, id) {
+                this.GetTemplate().fields[fieldName].set(this.GetInstance(), target.value, id)
+                this.$forceUpdate()
+                target.value = ""                    
+            }
+
+
+            methods.CollectionAdd = function() {
+                this.GetTemplate().add(data.instance)
+                this.$forceUpdate()
+            }
+
+            methods.CollectionDrop = function(key) {
+                this.GetTemplate().drop(data.instance, key)
+                this.$forceUpdate()
+            }
+                
+            methods.NewObject = NewObject           
+            
+            var menu =  [
+                {"label": "home", "icon": "home", "url": "classical.html"},
+                {"label": "hr"},
+                {"label": "register", "icon": "assignment_turned_in", "click" : function() {}},
+                {"label": "hr"}
+            ];
+            
+                                        
+            const title = "Music EZ";
+            var step = 0;
+            
+            
+            document.addEventListener('DOMContentLoaded', function(){
+                var apps = AVue.Init(window, title, menu, data, methods, function(data, methods) {
+                    methods.SetFlow("entity-flow")
+                    data.instance = NewObject(methods.GetFlow().model)
+                })
+           
+            }, false);
+        </script>
+    </head>
+    
+    <body class="padding-0 margin-0">
+		<div id="app" class="width-100 height-100">			
+			<header>
+				<column class="left width-50">
+                    <button class="header" v-on:click="menu.toggle()"><icon>menu</icon></button>
+					{{title}} 
+				</column>
+				<column class="right width-50">
+					<button class="header" v-on:click="console.log('TO IMPLEMENT')"><icon>account_circle</icon></button>
+                </column>
+			</header>
+			<div name="fade">
+				<menu v-if="menu.show">
+					<menu-title>{{menu.title}}</menu-title>
+					<menu-item v-for="entry in menu.entries" v-bind:class="{hr: entry.label === 'hr'}" v-on:click="ClickMenu(entry)">
+						<hr size="1" class="menu" v-if="entry.label === 'hr'"/>
+						<div v-if="entry.label !== 'hr'">
+						<icon>{{entry.icon}}</icon>{{entry.label}}</div>
+					</menu-item>
+				</menu>
+			</div>
+			
+            
+            <message layout-align="center center" class="error" v-if="error !== null">{{error}}</message>
+            <message layout-align="center center" class="progress" v-if="info !== null">{{info}}</message >
+            <message layout-align="center center" class="success" v-if="success !== null">{{success}}</message >
+            
+			<fader v-if="menu.show" v-bind:class="{show: menu.show}" v-on:click="menu.show = false" v-if="error === null"></fader>
+			
+            <main>
+
+                <nav-bar v-if="GetSteps().length > 1">
+                    <span v-for="(v, i) in GetSteps()" class="nav">
+                        <nav-step :class="i === flow.position ? 'current' : ''">{{i+1}}</nav-step>
+                        <nav-path v-if="i < GetSteps().length - 1"></nav-path>
+                    </span>
+                </nav-bar>
+
+                
+                <nav-bar v-if="GetSteps().length === 1">
+                    <nav-block>
+                        &nbsp;
+                    </nav-block>
+                </nav-bar>   
+                <br/> 
+
+                <table-block v-if="GetTemplate().type === 'choice'">                    
+                    <row-block class="head">
+                        <cell-block>{{GetTemplate().hint}}</cell-block>
+                    </row-block>
+                    <row-block>
+                        <cell-block class="choice" v-for="(field, id) in GetTemplate().source" v-on:click="Choice(id)"><icon>{{field.icon}}</icon><label>{{id}}</label></cell-block>
+                    </row-block>
+                </table-block>
+
+
+                <table-block v-if="GetTemplate().type === 'object'">
+                    <row-block class="head">
+                        <cell-block>{{GetTemplate().hint}}</cell-block>
+                    </row-block>
+                    <row-block v-for="(field, fieldName) in GetTemplate().fields">                        
+                        <cell-block :class="{'object': true, 'spacer': field.id === undefined}" v-if="field.condition === undefined || field.condition(instance)">
+                           {{field.label}}<span class="mandatory">{{field.mandatory ? '*' : ''}}</span class="mandatory"><br/>
+                            <input v-if="field.type === 'input' && (field.condition !== undefined && field.condition(instance))" :ref="flow.position + fieldName" type="text" :disabled="!field.editable" v-on:keyup="SetValue(fieldName, $event.target)" :value="GetValue(fieldName)"/>
+                            
+                            
+                            <table v-if="field.type === 'array'" width="100%">
+                                <tr>
+                                    <td colspan="2">
+                                        <input type="text"  v-on:keyup.enter="AddValue(fieldName, $event.target)">                                        
+                                    </td>
+                                </tr>
+                                <tr v-for="(ae, ai) in GetValue(fieldName)"> 
+                                    <td class="array">
+                                        {{ae}}
+                                    </td>
+                                    <td align="right">
+                                        <button class="array" v-if="ai > 0" v-on:click="ArrayUp(fieldName, ai)"><icon>keyboard_arrow_up</icon></button>
+                                        <button class="array" v-on:click="ArrayDrop(fieldName, ai)"><icon>clear</icon></button>
+
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <select v-if="field.type === 'select'" :ref="flow.position + fieldName" v-on:change="SetValue(fieldName, $event.target)" :value="GetValue(fieldName)">
+                                <option disabled selected value></option>
+                                <option v-for="opt in field.source">{{opt}}</option>       
+                            </select>
+                            
+                            <span v-if="field.type === 'value'" class="value">{{GetValue(fieldName)}}</span>
+
+                            <span v-if="field.type === 'valuecollection'" class="collection">
+                                <span v-for="(v,k) in field.getCollection(instance)">
+                                    <span v-for="(fv, fk) in field.fields">
+                                        {{fv.label}}
+                                        <span>{{GetValue(fieldName, k, fk)}}</span>
+                                </span>                                
+                            </span>
+
+                        </cell-block>
+                    </row-block>
+                </table-block>
+
+
+                <div v-if="GetTemplate().type === 'collection'">
+                    <row-block class="head">
+                        <cell-block>{{GetTemplate().hint}} <button class="nav collection-add" v-on:click="CollectionAdd()"><icon>add</icon> Add A Pseudonym</button></cell-block>
+                    </row-block>
+                    
+                    <table-block v-for="(inst, key) in GetTemplate().getCollection(instance)">
+                        <br/>
+                        <button class="array collection" v-on:click="CollectionDrop(key)"><icon>clear</icon></button>
+                        <row-block v-for="(field, fieldName) in GetTemplate().fields"> 
+                            <cell-block  :class="{'object': true, 'spacer': field.id === undefined}">
+                                {{field.label}}<span class="mandatory">{{field.mandatory ? '*' : ''}}</span><br/>
+                                <input v-if="field.type === 'input'" :ref="flow.position + fieldName + key" type="text" :disabled="!field.editable" v-on:keyup="SetValue(fieldName, $event.target, key)" :value="GetValue(fieldName, key)"/>
+                                
+                                
+                                <table v-if="field.type === 'array'" width="100%">
+                                    <tr>
+                                        <td colspan="2">
+                                            <input type="text"  v-on:keyup.enter="AddValue(fieldName, $event.target, key)">                                        
+                                        </td>
+                                    </tr>
+                                    <tr v-for="(ae, ai) in GetValue(fieldName, key)"> 
+                                        <td class="array">
+                                            {{ae}}
+                                        </td>
+                                        <td align="right">
+                                            <button class="array" v-if="ai > 0" v-on:click="ArrayUp(fieldName, ai, key)"><icon>keyboard_arrow_up</icon></button>
+                                            <button class="array" v-on:click="ArrayDrop(fieldName, ai, key)"><icon>clear</icon></button>
+
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <select v-if="field.type === 'select'"  :ref="flow.position + fieldName + key" v-on:change="SetCollectionValue(fieldName, $event.target, key)" :value="GetValue(fieldName), key">
+                                    <option disabled selected value></option>
+                                    <option v-for="opt in field.source">{{opt}}</option>       
+                                </select>                 
+
+                            </cell-block>
+                        </row-block>
+                        
+                        <br/><br/>
+
+                    </table-block>
+
+                </div>
+
+                <div style="text-align:right; width: 84vw;">
+                    <nav-block v-if="GetStep().showNav">
+                        <button class="nav" :disabled="!GetStep().previous" v-on:click="Previous()"><icon>navigate_before</icon></button>
+                        <button class="nav" :disabled="!GetStep().next"     v-on:click="Next()"><icon>navigate_next</icon></button>
+                    </nav-block>
+                </div>
+
+            </main>
+
+		</div>		
+	</body>	
+</html>

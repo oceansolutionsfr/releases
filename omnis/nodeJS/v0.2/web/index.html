@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>media</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" type="image/png" href="img/music-white.png">
+        <link rel="icon" type="image/png" href="img/music-white.png">
+        
+        <!-- styles -->
+        
+        <link rel="stylesheet" href="./css/10.css"/>
+        
+        <!--
+
+        
+        <link rel="stylesheet" href="./css/15.css"/>
+        
+        -->
+
+        <!-- libraries -->
+        
+        <script type="text/javascript" src="./js/21.js"></script>
+        <script type="text/javascript" src="./js/22.js"></script>
+        <script type="text/javascript" src="./js/23.js"></script>
+        <script type="text/javascript" src="./js/24.js"></script>
+        <script type="text/javascript" src="./js/25.js"></script>
+        <script type="text/javascript" src="./js/26.js"></script>
+       
+
+        <!-- page controller -->
+        
+        <script type='text/javascript'>
+            var data = {
+                vh: window.innerHeight,
+                vw: window.innerWidth,
+                list: false,
+                search:         "",
+                mode:           "home",
+                playing:        {index:undefined, audio:null, playing:false, currentTime:Helper.time(":", 0), media:null},
+                library:        {name : 'My Library', data: { products: {}, albums: {}, performers: {}, creators: {}}, imgdir: '/Volumes/Mobile/Medias/Image/', basedir:'/Volumes/Mobile/Medias/Audio', index: {}, lists: {}},
+                view:           {offset:0, size:13},
+                state:          {info:null, error:null, success:null},
+                subset:         null,
+                prevsubset:     null,
+                grid:           { album: null, creator: null, performer: null, playlist: null }
+            };
+            
+            var methods = {
+                Get: (type, id) => this.sets[type],
+
+                Index: (field = "id") => {
+                    window.apps.library.index = {};
+                    window.apps.library.index.products = Helper.sort(window.apps.library.data.products, field);
+                    window.apps.current = window.apps.library?.index?.products;
+                },
+
+                LoadJson: (event) => {
+                    let file = event.target.files[0];
+                    let fr = new FileReader();
+                    fr.onload = (ev) => {
+                        window.apps.library = JSON.parse(ev.target.result);
+                        window.apps.Index("album");
+                        window.apps.Message("success","" + new Intl.NumberFormat().format(Helper.size(window.apps.library.data.products)) + " products loaded successfully");
+                        
+                    }
+                    if(!file.name.endsWith(".json")) window.apps.Message("error","invalid file, must be a .json file");
+                    else fr.readAsText(file);
+                },
+
+                LoadMedias: (event) => {
+                    let vue = window.apps, library = window.apps.library;
+                    if(!library.basedir) {
+                        vue.Message("error", "no library loaded, go to 'library' first");
+                        return;
+                    }
+                    let added = 0;
+                    for(let file of event.target.files) {
+                        let fname = (""+file.name[0]).toUpperCase() + "/" + encodeURIComponent(file.name);
+                        let product = Helper.reduce(library.data.products, (item) => item.location === fname);
+                        if(Helper.size(product) === 1) {
+                            
+                        } else {
+                            product = {location: fname};
+                            let fields = file.name.split(",");
+                            product.performer   = fields[0].trim();
+                            product.album       = "unknown";
+                            product.creator     = "unknown";
+                            product.type        = "recording";
+                            switch(fields.length) {
+                                case 2:  // performer, title
+                                    product.title = fields[1].split(".")[0].trim();
+                                    break;
+                                case 3: // performer, title, creator
+                                    product.title = fields[1];
+                                    product.creator = fields[2].split(".")[0].trim();
+                                    break;
+                                case 4: // performer, album, track, title
+                                    product.album = fields[1].trim();
+                                    product.track = fields[2].trim();
+                                    product.title = fields[3].split(".")[0].trim();
+                                    break;
+                                case 6: // performer, album, track, title, identifier, creator
+                                    product.album = fields[1].trim();
+                                    product.track = fields[2].trim();
+                                    product.title = fields[3].trim();
+                                    product.identifier = fields[4].trim();
+                                    product.creator = fields[5].split(".")[0].trim();
+                                    break;
+                            }
+                            library.data.products = Helper.push(library.data.products, product);
+                            product.id = Object.values(library.data.products)[Helper.size(library.data.products) -1].id;
+                            added++;
+                            // creates albums
+                            (product.album ? product.album.split("|") : ["unkown"]).reduce((ret, alb) => {
+                                let album = Helper.reduce(library.data.albums, (item, key) => item.title === alb && ( alb === 'unknown' || item.performer === product.performer) );
+                                if(Helper.size(album) === 0) {
+                                    album = {
+                                        type: "album", 
+                                        title: alb,
+                                        performer: product.album === 'unknown' ? 'unknown' : product.performer ,
+                                        cover: library.imgdir + window.encodeURIComponent(product.album === 'unknown' ? 'unknown' : product.performer + ', ' + product.album) + '.jpg',
+                                        tracks: []
+                                    }
+                                    album.tracks[parseInt(product.track) - 1] = product.id;
+                                    library.data.albums = Helper.push(library.data.albums, album);
+                                }
+                                else if(alb === "unknown") Object.values(album)[0].tracks.push(product.id);
+                                else Object.values(album)[0].tracks[parseInt(product.track) - 1] = product.id;              
+                            },{});              
+
+                            // creates performers
+                            (product.performer ? product.performer.split("|") : []).reduce((ret, perfo) => {
+                                let performer = Helper.reduce(library.data.performers, (item, key) => item.name === perfo.trim());
+                                if(Helper.size(performer) === 0) library.data.performers = Helper.push(library.data.performers, {type: "entity", name:perfo.trim(),tracks: [product.id], cover: library.imgdir + window.encodeURIComponent(perfo.trim() + '.jpg')});
+                                else Object.values(performer)[0].tracks.push(product.id);   
+                            },{});
+                                                                            
+
+                            // creates creators
+                            (product.creator ? product.creator.split("|") : []).reduce((ret, crea) => {
+                                let creator = Helper.reduce(library.data.creators, (item, key) => item.name === crea);
+                                if(Helper.size(creator) === 0) {
+                                    let c = {type: "entity", name:crea.trim(),tracks: [product.id], cover: library.imgdir + window.encodeURIComponent(crea.trim() + '.jpg')};
+                                    library.data.creators = Helper.push(library.data.creators, c);
+                                }
+                                else Object.values(creator)[0].tracks.push(product.id);  
+                            },{});                               
+                        }
+                    }       
+                    vue.Index("album");
+                    vue.Message("success", "" + new Intl.NumberFormat().format(added) + " tracks added");
+                    vue.$forceUpdate();
+                    event.target.value = "";
+                },
+             
+
+                Message: (type, text, time = 5000) => {
+                    window.apps.state[type] = text;
+                    setTimeout(() => window.apps.state[type] = null, time);
+                },
+
+                Filter(dom) { 
+                    Helper.Helper.out("TODO", "review filtering according to dom");
+                    this.index = Object.keys(_properties(
+                        properties(this.medias, (property, key) => this.index.includes(key))    
+                        , (property, key) => key === "value" && property === dom));                    
+                },
+                
+                
+                // plays (streams) the first non null media strating by the media identified by id and looping in the current set
+                // @param {int} index identifier of the media to play
+                //
+                Play(index) {
+                    const vue = window.apps;
+                    if(Helper.size(vue.current) === 0) vue.Message("error", "no track to play, please select a library or a track set");
+
+                    else if(vue.playing.index === index) {
+                        if(vue.playing.audio === null) vue.SelectSong(index);
+                        if(vue.playing.playing) vue.playing.audio.pause();
+                        else vue.playing.audio.play();    
+                        vue.playing.playing = !vue.playing.playing;                                            
+                    } else {
+                        if(vue.playing.index !== undefined ||vue.playing.playing) vue.playing.audio.pause();                        
+                        vue.SelectSong(index);
+                        vue.playing.audio.play(); 
+                        vue.playing.playing = true;
+                    } 
+
+                    if(vue.playing.index < vue.view.offset)                     vue.view.offset = index;
+                    if(vue.playing.index > (vue.view.offset + vue.view.size -1))   vue.view.offset = index - vue.view.size + 1;
+                },
+                
+
+                PlayMedia: (id) => window.apps.Play(Object.keys(window.apps.current).indexOf(id)),
+
+
+                // select a song from the id
+                // @param {int} index identifier of the media to play 
+                // 
+                SelectSong : (index) => {
+                    let a = window.apps;
+                    index  = index === undefined || index < 0 || index >= Helper.size(a.current) ? 0 : index;
+                    a.playing.index = index;
+                    if(a.library.index.products === undefined || Helper.size(a.library.index.products) === 0) a.Index();
+                    var product = Object.values(a.current)[index];
+                    if(product === "undefined" || product == undefined) product = Object.values(a.current)[0];                    
+                    a.playing.media = product;
+                    a.playing.audio = new Audio("file://"+a.library.basedir + "/" + product.location);
+                    document.title = product.title + ' (' + product.performer + ') '
+                    a.playing.audio.onloadedmetadata = () => product.duration = Helper.time(":",Math.floor(a.playing.audio.duration));
+                    a.playing.audio.onended = () => a.PlayNext();
+                    a.playing.audio.ontimeupdate = () => a.playing.currentTime = Helper.time(":",Math.floor(a.playing.audio.currentTime));
+                },
+                
+
+                // play the next media in the current selected set
+                // @param {boolean} reverse flag indicating the direction of the browsing
+                //
+                PlayNext(reverse = false) {
+                    let     product = undefined, 
+                            index = window.apps.playing.index, 
+                            vue = window.apps,
+                            count = 0;;
+                    while(product === undefined) {
+                        count++;
+                        index = parseInt(index) + (reverse ? -1 : 1);
+                        if(index >= Helper.size(vue.current)) index = 0;
+                        if(index < 0) index = Helper.size(vue.current) - 1;
+                        product = Object.values(vue.current)[index];
+                        if(index === vue.playing.index && product === undefined) {
+                            vue.Message("error", "empty album");
+                            return;
+                        } else if(index === vue.playing.index) return;  
+                        if(count > 1000) {
+                            Helper.out("BUG", "infinte loop in track list", index, Object.values(vue.current));
+                            break;
+                        }                
+                    }
+                    if(vue.playing.playing && vue.playing.index !== index) vue.Play(index);
+                    
+                },
+
+
+                SaveLibrary : () => {
+                    let a = document.createElement('a');
+                    a.setAttribute("href",   "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.apps.library))  );
+                    a.setAttribute("download", window.apps.library.name + ".json");
+                    document.body.appendChild(a); // required for firefox
+                    a.click();
+                    a.remove();
+                },
+
+                // play a specific media set (containing a "medias" array property, with media ids)
+                // @param {object} set media set to play
+                //
+                PlaySet : function(set, mode = "track") 
+                {
+                    window.apps.current = Helper.select(window.apps.library.data.products, (product) => set.includes(product.id));
+                    if(this.playing.playing) {
+                        this.playing.playing = false;
+                        this.playing.audio.pause();
+                    }
+
+                    let product = undefined, index = 0, vue = window.apps;
+                    //product = vue.library.data.products[vue.current[index]];
+                    product = Object.values(vue.current)[index];
+                    while(product === undefined) {
+                        index++;
+                        if(index >= Helper.size(vue.current)) index = 0;
+                        product = Object.values(vue.current)[index];
+                        if(index === 0) {
+                            vue.Message("error", "empty album");
+                            return;
+                        }                        
+                    }
+
+                    this.SelectSong(index);
+                    this.Play(index);
+                    this.mode = mode;
+                },
+
+                /** Update the current display mode
+                 * @param {string} mode display mode to switch to
+                 */
+                SetMode : function(mode, before = () => true, after = () => true) {
+                    before();
+                    window.data.menu.toggle(false);
+                    switch(mode) {
+                        case 'track':
+                            // window.apps.current = window.apps.library?.index?.products;
+                            break;
+                        case 'album':
+                            window.apps.grid.album = Helper.sort(window.apps.library.data.albums, "title");
+                            break;
+                        case 'creator':
+                            window.apps.grid.creator = Helper.sort(window.apps.library.data.creators, "name");
+                            break;
+                        case 'performer':
+                            window.apps.grid.performer = Helper.sort(window.apps.library.data.performers, "name");
+                            break;
+                        case 'performer':
+                            window.apps.grid.performer = Helper.sort(window.apps.library.data.performers, "name");
+                            break;
+                        default:
+                            break;
+                    }
+                    window.apps.mode = mode;
+                    window.apps.$forceUpdate();
+                    after();
+                },
+                
+                /** returns the ordered list of items to display
+                 * @return {array} order list of items to display
+                 */
+                GetView : function() {
+                    return Object.values(this.current).slice(this.view.offset, this.view.size + this.view.offset)
+                },
+
+                Scroll : function(event) {
+                    if(this.mode === 'track') {
+                        if(event.deltaY > 0 && this.view.offset < (Helper.size(this.current) - this.view.size)) this.view.offset++
+                        if(event.deltaY < 0 && this.view.offset > 0) this.view.offset--
+                    }
+                },
+
+                Page : function() {
+                    window.apps.view.size = Math.floor((window.apps.vh - 0.22 * window.apps.vw) / (0.04 * window.apps.vw));
+                    return Helper.paginate(window.apps.current,window.apps.view.offset,window.apps.view.size);
+                },
+
+                ShowList : () => {
+                    window.apps.list = !window.apps.list;
+                },
+
+                Random: () => //window.apps.PlaySet(Helper.shuffle(window.apps.current)),
+                    { 
+                        window.apps.current = Helper.shuffle(Object.keys(window.apps.current)).reduce((current, id) => ({...current, [id]: window.apps.current[id]}),{});
+                        if(window.apps.playing.playing) window.apps.playing.index = Object.values(window.apps.current).indexOf(window.apps.playing.media);
+                        window.apps.$forceUpdate(); 
+                    }
+                ,
+                Subset : (id) => {
+                    if(window.apps.subset === id) {
+                        window.apps.prevsubset = id;
+                        window.apps.subset = null;
+                    } else {
+                        window.apps.subset = id;
+                        if(id !== window.apps.prevsubset) window.apps.PlaySet(window.apps.library.data.creators[id].tracks, "creator");
+                    }
+                }
+            }
+            
+            
+            
+            var menu =  [
+                {label: "home",         icon: "home",                   click :() =>window.methods.SetMode('album')},
+                {label: "library",      icon: "library_music",          click: () => window.methods.SetMode("open", () => window.library = {name: ""})},
+                {label: "hr"},
+                {label: "performers",   icon: "record_voice_over",      click: () => window.methods.SetMode('performer')},
+                {label: "creators",     icon: "person",                 click: () => window.methods.SetMode('creator')},
+                {label: "hr"},
+                {label: "album",        icon: "album",                  click: () => window.methods.SetMode('album')},
+                {label: "tracks",       icon: "mic",                    click: () => window.methods.SetMode('track')},
+                {label: "hr"}
+            ];
+            
+                                        
+            const title = "Oceans' Media";
+            var step = 0;
+            
+            
+
+            document.addEventListener('DOMContentLoaded', 
+                function() {
+                    // Vue.prototype.Helper = Helper;
+                    window.apps = AVue.Init(window, title, menu, data, methods);
+                    if(window.addEventListener) document.addEventListener('DOMMouseScroll', window.apps.Scroll, false);
+                    document.onmousewheel = window.apps.Scroll;
+                }, false);
+            
+            document.addEventListener("dragenter",  ( event ) => { if(event.target.id === "libr" || event.target.id === "mp3i") event.target.style.background = "rgba(255,255,255,0.7)"});
+            document.addEventListener("dragleave",  ( event ) => { if(event.target.id === "libr" || event.target.id === "mp3i") event.target.style.background = ""});
+            document.addEventListener("drop",       ( event ) => { if(event.target.id === "libr" || event.target.id === "mp3i") event.target.style.background = ""});
+            window.addEventListener('resize', () => {         window.apps.vh = window.innerHeight; window.apps.vw = window.innerWidth;       });
+            
+        </script>
+    </head>
+    
+    <body>
+        <div id="app" class="w100">
+            <div id="header" class="w100 fixed dark-a">
+                <header-box class="fixed color-a hover-a" style="left:1.5vw"  v-on:click="menu.toggle()">        <icon>menu</icon>               </header-box>
+                <header-box class="fixed roboto large100" style="left:6vw;width: unset;background:unset;cursor: default;"><span>{{title}}</span></header-box>
+                <form class="fixed h3w w9" style="top:1.5vw; left: 22vw;" id="mp3">
+                    <input class="hover-a light-font" id="libr" type="file" v-on:change="LoadJson"></input>
+                </form>
+                <header-box class="fixed color-a hover-a" style="left:32.5vw"       v-on:click="SaveLibrary">           <icon>cloud_upload</icon>       </header-box>
+
+                <form class="fixed h3w w9" style="top:1.5vw; right: 27.5vw;" id="mp3">
+                    <input class="hover-a light-font" id="mp3i" type="file" multiple v-on:change="LoadMedias"></input>
+                </form>
+                <header-box class="fixed color-a hover-a" style="right: 19.5vw;"    v-on:click="SetMode('performer')">  <icon>record_voice_over</icon>  </header-box>
+                <header-box class="fixed color-a hover-a" style="right: 15vw;"      v-on:click="SetMode('creator')">    <icon>person</icon>             </header-box>
+                <header-box class="fixed color-a hover-a" style="right: 10.5vw;"    v-on:click="ShowList()">            <icon>queue_music</icon>        </header-box>
+                <header-box class="fixed color-a hover-a" style="right: 6vw;"       v-on:click="SetMode('album')">      <icon>album</icon>              </header-box>
+                <header-box class="fixed color-a hover-a" style="right: 1.5vw;"     v-on:click="SetMode('track')">      <icon>mic</icon>                </header-box>
+            </div>
+
+            <div id="loader"></div>
+
+            <div layout-align="center center" id="message" class="w100 fixed roboto large100 error"    v-if="state.error !== null">{{state.error}}</div>
+            <div layout-align="center center" id="message" class="w100 fixed roboto large100 progress" v-if="state.info !== null">{{state.info}}</div >
+            <div layout-align="center center" id="message" class="w100 fixed roboto large100 success"  v-if="state.success !== null">{{state.success}}</div >
+            
+            <div class="w100 h6w" style="top:6vw;text-align: center;" id="control">
+                <control-box class="w3 fixed color-b hover-b" style="left:5vw;"  v-on:click="PlayNext(true)">          <icon>skip_previous</icon>  </control-box>
+                <control-box class="w3 fixed color-b hover-b" style="left:8.5vw;" v-on:click="Play(playing?.index)">    <icon v-if="!playing?.playing">play_arrow</icon><icon v-if="playing?.playing">pause</icon>   </control-box>
+                <control-box class="w3 fixed color-b hover-b" style="left:12vw;" v-on:click="PlayNext()">              <icon>skip_next</icon>  </control-box>
+                <control-box class="w3 fixed color-b hover-b" style="left:15.5vw;" v-on:click="Random()">                <icon>shuffle</icon>  </control-box>
+                <control-box class="fixed" style="right:5vw;width:12vw;cursor:default;background: unset;">          <icon>access_time</icon> <span>{{playing?.index !== null ? playing.currentTime : ""}}</span> </control-box>
+            </div>
+
+            <div class="fixed" style="top:7.5vw;left:20vw;line-height:3vw;font-size: 1.8vw;font-family: Lato;font-weight: 100;white-space: nowrap;">
+                <span class="light-b" style="overflow: hidden;text-overflow: ellipsis;width:61vw;padding: 0 1vw;display: inline-block;border-radius: var(--small-border-radius);">
+                    {{playing?.media !== null ? playing.media.title : ""}}{{ playing?.media?.creator !== undefined ? " / " +playing.media.creator :""}}{{ playing?.media?.performer !== undefined ? " ("+playing.media.performer+")" : "" }}
+                </span>
+            </div>
+
+
+            <!-- menu 
+            menu { position: fixed; padding: 0px; margin: 0px;top: 5vh;height: 95vh;width: 15vw;background: var(--color-menu);z-index: 2;}
+
+                
+            
+            -->
+
+            <transition name="fade">
+                <div  v-if="menu.show">
+                    <div class="fixed light-c" style="top:6vw;left:20vw;height:calc(100vh - 6vw);width:80vw;z-index:1;opacity:0.5;">
+                        &nbsp;
+                    </div>
+                    <div class="fixed" style="top:6vw;left:0vw;width:20vw;z-index:2;height:calc(100vh - 6vw);background:white;">
+                        <menu-title class="color-b" style="font-family:Lato;font-weight: 400;font-size: 1.8vw;color: var(--color-menu-header-font);text-align:center;text-transform: uppercase;
+                            padding: 1vw 0.75vw;display: block;z-index: 2;">{{menu.title}}</menu-title>
+                        <menu-item v-for="entry in menu.entries" :style="entry.label === 'hr' ? 'cursor: default;' : 'cursor: pointer;'" style="text-align:left; display:block;  z-index: 2;" v-on:click="ClickMenu(entry)">
+                            <hr size="1" style="width: calc(19.9vw);" v-if="entry.label === 'hr'"/>
+                            <div v-if="entry.label !== 'hr'"  class="hover-b" style="border-radius: var(--small-border-radius);
+                                margin: 0.5vw 0.5vw;padding: 0.3vw 0.3vw 0.6vw 0.3vw;font-size: 1.8vw;font-family:Lato;font-weight:100;"> 
+                                <icon style="margin-right: 0.5vw;top: 0.5vw;position: relative;margin-top: -0.1vw; color: var(--color-menu-font);">{{entry.icon}}</icon>{{entry.label}}
+                            </div>
+                        </menu-item>				
+                    </div>
+                </div>
+            </transition>
+            
+        
+
+            <!--
+
+            <info-text-box class="fixed light-b" v-if="playing?.media !== null && playing?.media !== undefined">                        
+                <field class="fixed" style="left: 6vw;width: 28vw;">
+                    <icon>album</icon>&nbsp; <span>{{playing?.media.album !== undefined ? playing.media.album : ""}}</span>
+                </field>                        
+                <field class="fixed" style="left: 34vw;width: 34vw;">
+                    <icon>music_note</icon>&nbsp; <span>{{playing?.index !== null ? playing.media.title : ""}}</span>
+                </field> 
+                <field class="fixed" style="left: 68vw;width: 27vw;">
+                    <icon>record_voice_over</icon>&nbsp;&nbsp;<span>{{playing?.media.performer !== undefined ? playing.media.performer : ""}}</span>
+                </field>
+            </info-text-box>
+            <info-text-box class="fixed light-b" v-if="playing?.media === null || playing?.media === undefined">                        
+                select a {{mode === 'track' ? 'track' : mode === 'album' ? 'album' : 'item'}}                    
+            </info-text-box>
+            
+            -->
+
+            <div class="fixed w100" style="height:20vw;top:12vw;" id="subset">
+            </div>
+
+
+            <!-- list view mode -->
+
+            <div class="fixed w100" style="height:calc(100vh - 12vw);top:12vw;text-align: center;" id="page" v-if="mode ==='track'">   
+                
+                <div class="dark-d w90" style="border-top-left-radius: var(--small-border-radius); border-top-right-radius: var(--small-border-radius);font-family: Roboto;font-weight: 400;font-size: 1.3vw;display: inline-block;position: relative;line-height: 4vw;vertical-align:middle;">
+                    <span class="cell" style="width:  5vw;" >&nbsp;</span>
+                    <span class="cell" style="width: 20vw;" >performer</span>
+                    <span class="cell" style="width: 20vw;" >album</span>
+                    <span class="cell" style="width:  4vw;" >piste</span>
+                    <span class="cell" style="width: 20vw;" >titre</span>
+                    <span class="cell" style="width: 15vw;" >creator</span>
+                    <span class="cell" style="width:  6vw;" >duration</span>
+                </div>
+                                               
+                <div class="w90" style="white-space: nowrap;font-family: Roboto;font-weight: 100;font-size: 1.3vw;display: inline-block;position: relative;line-height: 4vw;vertical-align:middle;" v-if="mode ==='track' && typeof(current) !== 'undefined'">
+                    <div class="table-line" v-for="(product,id, index) in Page()" :class="index % 2 === 0 ? 'color-d' : 'light-d'">
+                        <span class="cell" style="width:  5vw;">
+                            <img class="radius-small h3w w3" style="background:white;vertical-align:middle;" v-bind:src="product.id === playing?.media?.id && playing?.playing ? './img/son.gif' : '/Volumes/Mobile/Medias/Image/' + (product.album === 'unknown' ? 'unknown' : window.encodeURIComponent(product.performer + ', ' + product.album)) + '.jpg'" v-on:click="PlayMedia(product.id)">
+                        </span>
+                        <span class="cell ellips" style="width: 20vw; max-width: 20vw;">{{product.performer}}&nbsp;</span>
+                        <span class="cell ellips" style="width: 20vw; max-width: 20vw;">{{product.album === 'unknown' ? '' : product.album}}&nbsp;</span>
+                        <span class="cell ellips" style="width:  4vw; max-width:  4vw;">{{product.track}}&nbsp;</span>
+                        <span class="cell ellips" style="width: 20vw; max-width: 20vw;">{{product.title}}&nbsp;</span>
+                        <span class="cell ellips" style="width: 15vw; max-width: 15vw;">{{product.creator === 'unknown' ? '' : product.creator }}&nbsp;</span>
+                        <span class="cell ellips" style="width:  6vw; max-width:  6vw;">{{product.duration}}&nbsp;</span>
+                    </div>
+                </div>
+                
+                <div class="dark-d" style="border-bottom-left-radius: var(--small-border-radius); border-bottom-right-radius: var(--small-border-radius);font-family: Roboto;font-weight: 400;font-size: 1.3vw;width: 90vw;display: inline-block;position: relative;line-height: 4vw;vertical-align:middle;" v-if="mode ==='track'">
+                    {{typeof(current) !== 'undefined' ? new Intl.NumberFormat().format(Helper.size(current)) : 0}} tracks
+                </div>
+            </div>
+
+            <!-- grid view mode -->
+
+            <div class="fixed" style="top:12.9vw;text-align: right;right:9.2vw;font-size: 1.3vw;font-family: Lato;font-weight: 100;" v-if="mode === 'creator' || mode === 'performer' || mode === 'album'">
+                <span >{{ new Intl.NumberFormat().format(Helper.size(grid[mode])) }} {{ mode }} / {{ new Intl.NumberFormat().format(Helper.size(library.data.products)) }} tracks</span>
+            </div>
+
+            <div style="top:15vw;text-align: center;position: fixed; width: 100vw;height: calc(100vh - 21vw);left: 0vw;text-align: center;color: black;vertical-align: middle;font-size: 1vh; white-space: nowrap;overflow-y: scroll;display: inline-block;" 
+                 v-if="( mode === 'creator'  || mode === 'performer'  || mode === 'album') && Helper.typeof(grid[mode]) !== 'undefined'">
+                <center> 
+                    <div style="display: inline-grid;width: 82vw;justify-items: center;align-items: center;left: 9vw;position: absolute;grid-gap: 3vh 4.2vw;grid-auto-flow: row;grid-template-columns: repeat(auto-fit, minmax(13vw, 13vw));">
+                        <div  class="clickable" style="line-height: 0px;display: table-cell;" v-for="group in grid[mode]" v-on:click="PlaySet(group.tracks)"> 
+                            <img :src="group.cover" style="position: relative; width: 13vw !important; height: 13vw !important; left: 0px; border-radius: var(--small-border-radius); max-width: 13vw;"/>
+                            <span class="legend" v-if="group.title !== undefined || group.name !== undefined" style="font-family: 'Roboto';font-weight: 300;position: absolute;margin-left: -13vw;width: 11vw;height: 11vw;border-radius: 0px 0px 6px 6px;text-overflow: ellipsis;white-space: nowrap;overflow: hidden;padding: 1vw;display: inline-block;line-height: 3.7vw;font-size: 1.2vw;">
+                                {{group.title ? group.title : ""}}<br/>
+                                {{group.name ? group.name : ""}}<br/>
+                                {{group.tracks.length }} track{{ group.tracks.length >1?'s':''}}
+                            </span>
+                        </div>
+                    </div>
+                </center>
+            </div>
+
+
+
+           
+		</div>		
+	</body>	
+</html>

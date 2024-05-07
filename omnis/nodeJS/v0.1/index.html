@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>media universe</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" type="image/png" href="img/icon.png">
+        <link rel="icon" type="image/png" href="img/icon.png">
+        
+        <!-- styles -->
+        
+        <link rel="stylesheet" href="./css/a.css"/>
+        <link rel="stylesheet" href="./css/library.css"/>
+        
+        <!-- libraries -->
+                
+        <script type="text/javascript" src="./js/vue.js"></script>
+        <script type="text/javascript" src="./js/axios.js"></script>
+        <script type="text/javascript" src="./js/a.helper.js"></script>
+        <script type="text/javascript" src="./js/a.core.i18n.js"></script>
+        <script type="text/javascript" src="./js/a.model.js"></script>
+        <script type="text/javascript" src="./js/a.ui.js"></script>
+        <script type="text/javascript" src="./js/a.ui.vue.js"></script>
+       
+
+        <!-- page controller -->
+        
+        <script type='text/javascript'>
+            var __i = 0
+            var data = {
+                "Server": "http://localhost:2307",
+                "collection" : {
+                    "index" : [],
+                    "mediaIds" : {}
+                },
+                'playing': {
+                    'index' : undefined,
+                    'audio' : null,
+                    'playing' : false, 
+                    'currentTime':Helper.FormatSeconds(0,4),
+                    "media": null
+                },
+                "sets": {
+                    "current" : new Collection(),
+                    "medias" : new Collection(),
+                    "albums" : new Collection(),
+                    "performers" : new Collection(),
+                    "creators" : new Collection()
+                },
+                "view" : {
+                    "offset" : 0,
+                    "size" : 13
+                },
+                "info": null,
+                "error": null,
+                "success": null,
+                "search":"",
+                "mode" : "album"
+            };
+            
+            var methods = {
+
+                updateParameter($key, $value) {
+                    window.apps.parameters[$key].value = $value
+                    window.apps.$forceUpdate()
+                },
+
+                saveParameters() {
+                    
+                },
+             
+                async CallPostAPI($action) {
+                    return await axios.post(this.GetURI($action))
+                },
+
+                async CallPutAPI($action, $body) {
+                    return await axios.put(this.GetURI($action), $body)
+                },
+
+
+                GetURI(path, action) {return `${this.Server}/api/v1/library${path === undefined ? '' : '/' + path}${action === undefined ? '' : '/' + action}` },
+                
+                
+                async ScanMedias() { return await axios.post(this.GetURI("scan"),{"_req": 1})},
+
+                async RequestMedias() { return await axios.get(this.GetURI())},
+
+                async RequestAlbums() { return await axios.get(this.GetURI("albums"))},
+
+                async RequestPerformers() { return await axios.get(this.GetURI("performers"))},
+
+                async RequestCreators() { return await axios.get(this.GetURI("creators"))},
+
+                async RequestMedia(id) { return await axios.get(this.GetURI(id))},
+
+                async GetParameters() { 
+                    console.log(this.GetURI("parameters"));
+                    return (await axios.get(this.GetURI("parameters"))).data},
+
+                async GetAll() {
+                    this.sets.medias = Collection.cast((await this.ScanMedias()).data)
+
+                    this.sets.creators = Collection.cast((await axios.get(this.GetURI("creators"))).data)
+                    this.sets.creators.forEach(function($creator) { $creator.medias = Collection.cast($creator.medias) })
+
+                    this.sets.albums = Collection.cast((await axios.get(this.GetURI("albums"))).data)
+                    this.sets.albums.forEach(function($album) { $album.medias = Collection.cast($album.medias) })
+
+                    
+                    this.sets.performers = Collection.cast((await axios.get(this.GetURI("performers"))).data)
+                    this.sets.performers.forEach(function($performer) { $performer.medias = Collection.cast($performer.medias) })
+                
+                },
+
+                Filter(dom) { this.index = Helper.FilterSync(Helper.SelectSync(this.medias, this.index), dom)},
+                
+                
+                // plays (streams) the first non null media strating by the media identified by id and looping in the current set
+                // @param {int} index identifier of the media to play
+                //
+                Play(index) {
+                    if(this.playing.index == index) {
+                        if(this.playing.audio == null) this.SelectSong(index)
+                        if(this.playing.playing) this.playing.audio.pause()
+                        else this.playing.audio.play()    
+                        this.playing.playing = !this.playing.playing                                            
+                    } else {
+                        if(this.playing.index !== undefined || this.playing.playing) this.playing.audio.pause()                        
+                        this.SelectSong(index)
+                        this.playing.audio.play() 
+                        this.playing.playing = true
+                    } 
+                },
+                
+
+                PlayMedia($media) {
+                    this.Play(this.sets.current.getIndex($media))
+                },
+
+
+                // select a song from the id
+                // @param {int} index identifier of the media to play 
+                // 
+                SelectSong($index) {
+                    var _self = this
+                    _self.playing.index = $index
+                    var _item = _self.sets.current.values[$index]
+                    _self.playing.media = _item
+                    _self.playing.audio = new Audio(_self.GetURI(_item.key,'stream'))
+                    document.title = _item.title + ' (' + _item.performer + ') '
+                    _self.playing.audio.onloadedmetadata = function() {
+                        _item.duration = Helper.FormatSeconds(_self.playing.audio.duration,4)                        
+                    }
+                    _self.playing.audio.onended = function() {
+                        _self.PlayNext()
+                    }
+                    _self.playing.audio.ontimeupdate = function() {                        
+                        _self.playing.currentTime = Helper.FormatSeconds(_self.playing.audio.currentTime,4)
+                    }
+                },
+                
+
+                // play the next media in the current selected set
+                // @param {boolean} reverse flag indicating the direction of the browsing
+                //
+                PlayNext(reverse = false) {
+                    var index = this.playing.index
+                    index = parseInt(index) + (reverse ? -1 : 1)
+                    if(index >= this.sets.current.length) index = 0
+                    if(index < 0) index = this.sets.current.length - 1
+                    if(this.playing.playing && this.playing.index !== index) this.Play(index)
+                },
+
+
+                // play a specific media set (containing a "medias" array property, with media ids)
+                // @param {object} set media set to play
+                //
+                PlaySet : function($set) 
+                {
+                    //this.sets.current = Collection.cast($set)
+                    this.sets.current = $set
+                    if(this.playing.playing) {
+                        this.playing.playing = false
+                        this.playing.audio.pause()
+                    }
+                    this.SelectSong(0)
+                    this.Play(0)
+                    this.mode = "track"
+                },
+
+                /** Update the current display mode
+                 * @param {string} mode display mode to switch to
+                 */
+                SetMode : function(mode) {
+                    window.apps.mode = mode
+                    window.data.menu.toggle(false)
+                    window.apps.$forceUpdate()
+                },
+                
+                /** returns the ordered list of items to display
+                 * @return {array} order list of items to display
+                 */
+                GetView : function() {
+                    return this.sets.current.values.slice(this.view.offset, this.view.size + this.view.offset)
+                },
+
+                Scroll : function(event) {
+                    if(this.mode === 'track') {
+                        if(event.deltaY > 0 && this.view.offset < (this.sets.current.length - this.view.size)) this.view.offset++
+                        if(event.deltaY < 0 && this.view.offset > 0) this.view.offset--
+                    }
+                }
+            }
+            
+            
+            
+            var menu =  [
+                {"label": "home", "icon": "home", "click" : function() {window.methods.SetMode('album')}},
+                {"label": "hr"},
+                {"label": "performers", "icon": "record_voice_over", "click" : function() {window.methods.SetMode('performer') }},
+                {"label": "creators", "icon": "person", "click" : function() {window.methods.SetMode('creator')}},
+                {"label": "hr"},
+                {"label": "album", "icon": "album", "click" : function() {window.methods.SetMode('album')}},
+                {"label": "tracks", "icon": "mic", "click" : function() {window.methods.SetMode('track')}},
+                {"label": "hr"},
+                {"label": "playlist", "icon": "queue_music", "click" : function() {}},
+                {"label": "settings", "icon": "settings", "click" : function() {window.methods.SetMode("parameters")}},
+                {"label": "hr"}
+            ];
+            
+                                        
+            const title = "Media Universe";
+            var step = 0;
+            
+            
+
+            document.addEventListener('DOMContentLoaded', 
+                function() {
+                    window.apps = AVue.Init(window, title, menu, data, methods)
+                    if(window.addEventListener) document.addEventListener('DOMMouseScroll', window.apps.Scroll, false)
+                    document.onmousewheel = window.apps.Scroll
+                    window.apps.GetParameters().then(function($parameters) {
+                        var _ready = true
+                        window.apps.parameters = $parameters
+                        
+                        Object.values(window.apps.parameters).forEach(function($parameter) {
+                            _ready = _ready && ( $parameter.type === "action" || $parameter.value !== undefined)
+                        })
+                        if(!_ready) window.apps.SetMode("parameters")
+                        else window.apps.GetAll().then(function() { window.apps.$forceUpdate() })  
+
+                    }).catch(function($error) {console.log($error)})
+                }, false);
+        </script>
+    </head>
+    
+    <body>
+		<div id="app">
+            <header>
+				<column class='left'>
+					<button class='header' v-on:click="menu.toggle()"><icon>menu</icon></button>
+					{{title}}
+				</column>
+                <column class='right'>
+                    <button class='header' v-on:click="SetMode('track')"><icon>mic</icon></button>&nbsp;&nbsp;
+                    <button class='header' v-on:click="SetMode('album')"><icon>album</icon></button>&nbsp;&nbsp;
+                    <button class='header' v-on:click="SetMode('creator')"><icon>person</icon></button>&nbsp;&nbsp;
+                    <button class='header' v-on:click="SetMode('performer')"><icon>record_voice_over</icon></button>&nbsp;&nbsp;
+                </column>
+			</header>
+			<transition name="fade">
+				<menu v-if="menu.show">
+					<menu-title>{{menu.title}}</menu-title>
+					<menu-item v-for="entry in menu.entries" v-bind:class="{hr: entry.label === 'hr'}" v-on:click="ClickMenu(entry)">
+						<hr size="1" class="menu" v-if="entry.label === 'hr'"/>
+						<div v-if="entry.label !== 'hr'">
+						<icon>{{entry.icon}}</icon>{{entry.label}}</div>
+					</menu-item>
+				</menu>
+			</transition>
+			
+            
+            <message layout-align="center center" class="error" v-if="error !== null">{{error}}</message>
+            <message layout-align="center center" class="progress" v-if="info !== null">{{info}}</message >
+            <message layout-align="center center" class="success" v-if="success !== null">{{success}}</message >
+           
+            <main>
+               
+                
+                <div class="line" style="line-height: 5vh;top:22vh;height:76vh;" v-if="mode === 'parameters'">
+                    <center> 
+                        <div style="line-height: 5vh;" v-for="parameter in parameters">
+                            <div>
+                                <span style="width:40vw; display:inline-block; text-align: right;">
+                                    {{ parameter.label }}:&nbsp;
+                                </span>
+                                <span style="width:40vw; display:inline-block; text-align: left;">
+                                    <input style="width:40vw;"  v-if="parameter.type === 'string'" :value="parameter.value" @input="updateParameter(parameter.key, $event.target.value)"/>
+                                    <button v-if="parameter.type === 'action'" class="antipod" v-on:click="CallPostAPI(parameter.value)">trigger</button>
+                                </span> 
+                                
+                            </div>
+                             
+                            
+                            
+                            
+                        </div>
+                    </center>
+                    <br/><button class="antipod" v-on:click="CallPutAPI('parameters', parameters)">save</button>
+                </div>
+               
+                
+                <div class="line" style="line-height: 6vh; top:5vh;">
+                    <button class="antipod" v-on:click="PlayNext(true)">
+                        <icon>skip_previous</icon> 
+                    </button>
+                    <button class="antipod" v-on:click="Play(playing.index)">
+                        <icon v-if="!playing.playing">play_arrow</icon> 
+                        <icon v-if="playing.playing">pause</icon> 
+                    </button>
+                    <button class="antipod" v-on:click="PlayNext()">
+                        <icon>skip_next</icon>                         
+                    </button>
+                    <button class="antipod" ng-click="Random()">
+                        <icon>shuffle</icon>                         
+                    </button>
+                </div>
+             
+                <div class="line" style="line-height: 6vh;top:11vh;">
+                    <span class="info" v-if="playing.media !== null && playing.media !== undefined">
+                        
+                        <span v-if="playing.media.album !== undefined" style="min-width: 27vw;max-width: 27vw;border-top-left-radius: 0.3vh;border-bottom-left-radius: 0.3vh;">
+                            <icon>album</icon>&nbsp; {{playing.media.album}}
+                        </span>
+                        <span v-if="playing.media.album === undefined" style="min-width: 27vw;max-width: 27vw;border-top-left-radius: 0.3vh;border-bottom-left-radius: 0.3vh;">
+                            &nbsp;
+                        </span>
+                        
+                        <span v-if="playing.index !== null" style="min-width: 30vw;max-width: 30vw;">
+                            <icon>music_note</icon>&nbsp; {{playing.media.title}}
+                        </span>
+                        <span v-if="playing.index === null" style="min-width: 30vw;max-width: 30vw;">
+                            &nbsp;
+                        </span>
+                        
+                        <span v-if="playing.media.performer !== undefined" style="min-width: 17.5vw;max-width: 17.5vw;">
+                            <icon>record_voice_over</icon>&nbsp;&nbsp;{{playing.media.performer}}
+                        </span>
+                        <span v-if="playing.media.performer === undefined" style="min-width: 17.5vw;max-width: 17.5vw;">
+                            &nbsp;
+                        </span>
+
+                        <span v-if="playing.index !== null" style="min-width: 8vw;max-width: 8vw;border-top-right-radius: 0.3vh;border-bottom-right-radius: 0.3vh;">
+                            <icon>access_time</icon>&nbsp;{{playing.currentTime}}
+                        </span> 
+                        <span v-if="playing.index === null" style="min-width: 8vw;max-width: 8vw;border-top-right-radius: 0.3vh;border-bottom-right-radius: 0.3vh;">
+                            &nbsp;
+                        </span> 
+                        
+                    </span>
+                    <span class="info" v-if="playing.media === null || playing.media === undefined">                        
+                        <span style="min-width: 82.5vw;border-radius: 0.3vh;">
+                            select a {{mode === 'track' ? 'track' : mode === 'album' ? 'album' : 'item'}}
+                        </span>
+                    </span>
+                </div>
+
+                
+                
+                <div class="line" style="line-height: 5vh;top:17vh;font-size: 1.7vh; text-align: right;"  v-if="mode === 'album'">
+                    <span style='margin-right: 9vw;'>
+                    {{sets.albums.length > 0 ? sets.albums.length + ' albums' : ''}}
+                    {{sets.medias.length ? ' / ' + sets.medias.length + ' tracks' : ''}}
+                    </span>
+                </div>
+
+                
+                <div class="line" style="top:22vh;height:76vh;" v-if="mode === 'album'">
+                    <center> 
+                        <div class="album-grid">
+                            <div v-for="a in sets.albums.values" class="album-cell" v-on:click="PlaySet(a.medias)">
+                                <img :src="Server + '/img/' + window.encodeURIComponent(a.cover) + '.jpg'" class="album"/>
+
+                                <span v-if="a.name !== undefined" class="legend tra">
+                                    {{a.performer}}<br/>{{a.name}}<br/>{{ a.medias.length }} track{{ a.medias.length >1?'s':''}}
+                                </span>
+                            </div>
+                        </div>
+                    </center>
+                </div>
+                
+                <div class="line" style="top:22vh;height:76vh;" v-if="mode === 'creator'">
+                    <center> 
+                        <div class="album-grid">
+                            <div v-for="creator in sets.creators.values" class="album-cell" v-on:click="PlaySet(creator.medias)">
+                                <img :src="Server + '/img/' + window.encodeURIComponent(creator.name) + '.jpg'" class="album"/>
+
+                                <span v-if="creator.name !== undefined" class="legend tra">
+                                    <br/>{{creator.name}}<br/>{{ creator.medias.length }} track{{ creator.medias.length >1?'s':''}}
+                                </span>
+                            </div>
+                        </div>
+                    </center>
+                </div>
+
+
+                <div class="line" style="top:22vh;height:76vh;" v-if="mode === 'performer'">
+                    <center> 
+                        <div class="album-grid">
+                            <div v-for="performer in sets.performers.values" class="album-cell" v-on:click="PlaySet(performer.medias)">
+                                <img :src="Server + '/img/' + window.encodeURIComponent(performer.name) + '.jpg'" class="album"/>
+
+                                <span v-if="performer.name !== undefined" class="legend tra">
+                                    <br/>{{performer.name}}<br/>{{ performer.medias.length }} track{{ performer.medias.length >1?'s':''}}
+                                </span>
+                            </div>
+                        </div>
+                    </center>
+                </div>
+
+
+                <div class="line" style="line-height: 5vh;top:17vh;"  v-if="mode === 'track'">
+                    <span class="search">
+                        <icon>search</icon>
+                        <input type="text" v-bind="search" placeholder="type me" v-on:keyup="Filter($event.target.value)"/>
+                    </span>
+                </div>
+
+
+                <div class="line"  style="top:22vh;" v-if="mode === 'track'">
+                    <div class="table-head">
+                        <span class="second">&nbsp;</span>
+                        <span class="artist">performer</span>
+                        <span class="album">album</span>
+                        <span class="piste">piste</span>
+                        <span class="titre">titre</span>
+                        <span class="composer">creator</span>
+                        <span class="duration" style="max-width: calc(6vw + 10px); width: calc(6vw + 10px);">duration</span>
+                    </div>
+                        
+                      
+                    <div class="table-body" >
+                        <div class="table-line" v-for="item in GetView()" v-if="item !== null && item !== undefined">
+                            <!--
+                            <span class="first center play">
+
+                                Server + '/img/' + window.encodeURIComponent(a.cover) + '.jpg'
+
+
+                                <img src="./img/son.gif" class="play" v-if="item.key === playing.media.key && playing.playing" v-on:click="PlayMedia(item)">
+                                <icon v-if="!(item.key === playing.media.key && playing.playing)" v-on:click="PlayMedia(item)">play_arrow</icon>
+                            </span>
+                            -->
+                            <span class="second">
+                                <img v-bind:src=" Server + '/img/' + (item.album === 'unknown' ? 'unknown' : window.encodeURIComponent(item.performer + ', ' + item.album)) + '.jpg'" class="mini hover"  v-on:click="PlayMedia(item)">
+                                <img src="./img/son.gif" class="play" v-if="item.key === playing.media.key && playing.playing" v-on:click="PlayMedia(item)">
+                            </span>
+                            <span class="artist">{{item.performer}}&nbsp;</span>
+                            <span class="album">{{item.album}}&nbsp;</span>
+                            <span class="piste center">{{item.track}}&nbsp;</span>
+                            <span class="titre">{{item.title}}&nbsp;</span>
+                            <span class="composer">{{item.creator}}&nbsp;</span>
+                            <span class="duration">
+                                {{item.duration}}&nbsp;
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="table-foot">
+                        {{sets.current.length}} selected on {{sets.medias.length}} tracks
+                    </div>
+
+                    
+                </div>
+
+              
+               
+            
+            </main>
+                
+           
+		</div>		
+	</body>	
+</html>

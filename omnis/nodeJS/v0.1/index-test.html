@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>media universe</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" type="image/png" href="img/icon.png">
+        <link rel="icon" type="image/png" href="img/icon.png">
+        
+        <!-- styles -->
+        
+        <link rel="stylesheet" href="./css/a.css"/>
+        <link rel="stylesheet" href="./css/library.css"/>
+        
+        <!-- libraries -->
+                
+        <script type="text/javascript" src="./js/axios.js"></script>
+        <script type="text/javascript" src="./js/vue.js"></script>
+
+        
+        <!-- page controller -->
+        
+        <script type='text/javascript'>
+            
+                    
+
+            var data = {
+                "email" : "",
+                "name": "",
+                "password" : "",
+                "response": {}
+            };
+            
+            var methods = {
+
+                PostUser() {
+                    axios(
+                        {
+                            method: 'post',
+                            url: 'http://localhost:2308/api/v1/gab/users/',
+                            data: {
+                                "name": this.name,
+                                "key": this.email,
+                                "securitykey": this.password.length > 0 ? this.password : undefined
+                            }
+                        }
+                    ).then((response) => {
+                        this.response = response.data;
+                    }).catch((error) => {
+                        this.response = error.response.data;
+                    });
+                    this.name = "";
+                    this.email = "";
+                    this.password = "";
+                }
+
+                
+            }
+            
+            document.addEventListener('DOMContentLoaded', 
+                function() {
+                    var app = new Vue({
+                        el: '#app',
+                        data: data,
+                        methods : methods 
+                    });
+                }, false);
+        </script>
+    </head>
+    
+    <body>
+		<div id="app">
+            name: <input v-model="name"><br/>
+            email: <input v-model="email"><br/>
+            password: <input v-model="password"><br/><br/>
+            <button v-on:click="PostUser()">submit</button>
+            <br/><br/><br/><br/>
+            {{ response }}
+
+        </div>
+	</body>	
+</html>

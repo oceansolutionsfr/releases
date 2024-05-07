@@ -1,0 +1,7 @@
+{
+    "name": "crawler",
+    "port": 8081,
+    "media_dir": "/Volumes/Mobile/Medias/Audio",
+    "cover_dir": "/Volumes/Mobile/Medias/Image",
+    "output_file": "/Volumes/Mobile/Projects/OceanSolutions/media/build/v2/views/viewer/Oceans2.json"
+}

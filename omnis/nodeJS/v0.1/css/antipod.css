@@ -1,0 +1,85 @@
+/** generic styles **/
+
+/**html { 
+  background: url('../img/us-175-1000-750-c-l-1-White Sands, New Mexico.jpg') no-repeat center center fixed; 
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+  color: white;
+}**/
+
+html {
+  overflow: hidden;
+}
+
+.outer {
+    display: table;
+    position: absolute;    
+    height: 100%;
+    width: 100%;
+}
+
+.middle {display: table-cell; vertical-align: middle;}
+
+.inner {
+  margin-right: auto;
+  margin-left: auto;
+  text-align: center;
+  width: 100%;
+}
+
+h1 {
+  font-size: 45px;display:inline;
+}
+
+.a-regular {
+  font-size: 20px;display:inline;
+}
+
+
+
+a, a:visited, a:hover {	color: #000000; }
+
+
+/** a styles extension **/
+
+.a-header {	background:rgba(255,255,255,0);}
+
+
+
+/** overrides JQuery UI **/
+
+.ui-button { font-family: Roboto;border-color:#404040; color:#000000;	padding-top: 10px;	padding-bottom: 10px; background: #ffffff;transition:.3s;}
+
+.ui-button:hover { background: #d0d0d0;border-color:#a0a0a0;transition:.3s;}
+
+
+a.ui-button, a:visited.ui-button, a:link.ui-button {
+  font-size:20px;
+  color: black;
+}
+
+
+
+/** antipod styles **/
+
+#background {
+  background: url('../img/blank.gif') no-repeat center top scroll; 
+  background-attachment: local;
+  height: 100%;
+  position: absolute;
+  margin-top: 0px;
+  width: 50%;
+  background-size: cover;
+  z-index:-1;
+}
+
+
+
+#footer {
+   position:absolute;
+   top:85%;
+   width:100%;
+  
+}

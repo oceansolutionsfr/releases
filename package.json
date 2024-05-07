@@ -2,19 +2,7 @@
   "type": "module",
   "scripts": {
     "clean": "find . -name ._* -delete ; find . -name .DS_Store -delete ; rm -Rf tmp/*  ",
-    "commit": "npm run clean ; git add -u . && git add . --all && git commit && git push origin main",
+    "commit": "npm run clean ; git add -v -u . && git add . --all && git commit && git push -v origin main",
     "update": "git pull origin-lab main"
-  },
-  "nodemonConfig": {
-    "ext": "js,html,ts,json,vue,env,css",
-    "ignore": [
-      "./**/services/lib/*.js",
-      "./omnis/**/lib/*.js"
-    ],
-    "watch": [
-      "./**/services/**/*",
-      "./lib/**/*",
-      "./omnis/**/*"
-    ]
   }
 }
